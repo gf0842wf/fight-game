@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from . import settings
-from twisted.internet import protocol
+from twisted.internet import protocol, error
 from twisted.protocols import policies
 from twisted.internet.threads import deferToThread
 from lib import utils
@@ -27,10 +27,17 @@ class LinkServerTCPProtocol(utils.LogMixin, policies.TimeoutMixin, protocol.Prot
 
     def connectionLost(self, reason):
         """连接断开发送到redis in 队列"""
+        if isinstance(reason, error.ConnectionDone):
+            # 正常结束
+            reason_no = 1
+        elif isinstance(reason, error.ConnectionLost):
+            # 连接丢失
+            reason_no = 2
+        else:
+            reason_no = 3
         cmd = 3
-        params = [self.conn_flag, 1] # 暂时不区分断开类型
+        params = [self.conn_flag, reason_no] 
         self.factory.rds.addMsgIn(cmd, params)
-        # 连接断开
         if self.factory.addr2clis.get(self.conn_flag):
             del self.factory.addr2clis[self.conn_flag]
         self.msg("Connection Lost:", self.conn_flag, reason.getErrorMessage()) 
